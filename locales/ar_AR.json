@@ -1,0 +1,16 @@
+{
+  "welcome": "مرحبًا",
+  "no_articles": "لم يتم العثور على مقالات.",
+  "settings": "الإعدادات",
+  "dark_mode": "الوضع الليلي",
+  "preferences": "التفضيلات",
+  "logout": "تسجيل الخروج",
+  "add_article": "ميزة إضافة مقال جديد قيد التطوير!",
+  "categories": {
+    "all": "الكل",
+    "politics": "السياسة",
+    "technology": "التكنولوجيا",
+    "sports": "الرياضة",
+    "entertainment": "الترفيه"
+  }
+}

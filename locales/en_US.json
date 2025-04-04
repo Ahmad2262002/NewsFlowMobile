@@ -1,0 +1,16 @@
+{
+  "welcome": "Welcome",
+  "no_articles": "No articles found.",
+  "settings": "Settings",
+  "dark_mode": "Dark Mode",
+  "preferences": "Preferences",
+  "logout": "Logout",
+  "add_article": "Add new article feature is under development!",
+  "categories": {
+    "all": "All",
+    "politics": "Politics",
+    "technology": "Technology",
+    "sports": "Sports",
+    "entertainment": "Entertainment"
+  }
+}
