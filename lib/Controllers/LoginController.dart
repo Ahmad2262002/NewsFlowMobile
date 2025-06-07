@@ -1,35 +1,104 @@
+import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
+import 'package:dio/dio.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:get/get.dart';
 import 'package:newsflow/Core/Network/DioClient.dart';
-import 'package:newsflow/Core/showSuccessDialog.dart';
 import 'package:newsflow/Core/showErrorDialog.dart';
+import 'package:newsflow/Core/showSuccessDialog.dart';
 import 'package:newsflow/Routes/AppRoute.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class LoginController extends GetxController {
-  // Controllers for email and password fields
   final TextEditingController email = TextEditingController();
   final TextEditingController password = TextEditingController();
+  final isLoading = false.obs;
+  final RxBool isPasswordVisible = false.obs;
+  late final SharedPreferences prefs;
 
-  // Loading state
-  var isLoading = false.obs;
+  // Fun messages for different scenarios
+  final _funnyMessages = {
+    'welcome': [
+      "Welcome back! Ready for some news?",
+      "Ah, you're back! Missed us, didn't you?",
+      "News awaits! Let's get you in.",
+    ],
+    'emptyFields': [
+      "Oops! You forgot to fill something!",
+      "Empty fields? That's like a newspaper with no news!",
+      "We need those deets to let you in!",
+    ],
+    'invalidEmail': [
+      "That email looks... suspicious. Like fake news!",
+      "Is that a real email or are you testing us?",
+      "Even our AI thinks that email looks funny!",
+    ],
+    'networkError': [
+      "Who turned off the internet? Check your connection!",
+      "No signal? Try waving your phone around!",
+      "Our servers are on a coffee break. Try again soon!",
+    ],
+    'timeout': [
+      "The server is taking a nap. Try again!",
+      "This is slower than snail mail! Try again?",
+      "Timeout! Even turtles would be faster!",
+    ],
+    'loginFailed': [
+      "Oops! Wrong combo. Try again?",
+      "Invalid credentials. Are you a robot? 🤖",
+      "That didn't work. Maybe your cat walked on the keyboard?",
+    ],
+    'unexpectedError': [
+      "Something weird happened. Blame the gremlins!",
+      "Our app just did a somersault. Try again?",
+      "Error 42: Meaning of life not found. Try again!",
+    ],
+    'success': [
+      "Success! Let's get you the freshest news!",
+      "You're in! Time to read all the things!",
+      "Access granted! Prepare for news overload!",
+    ]
+  };
 
-  // SharedPreferences instance
-  late SharedPreferences prefs;
-
-  @override
-  void onInit() {
-    super.onInit();
-    _loadSharedPreferences();
+  String _getRandomMessage(String key) {
+    final messages = _funnyMessages[key] ?? ["Please try again."];
+    return messages[DateTime.now().millisecond % messages.length];
   }
 
-  // Load SharedPreferences and check for existing token
-  void _loadSharedPreferences() async {
-    prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('token');
-    if (token != null) {
-      // Navigate to home if token exists
+  @override
+  void onInit() async {
+    super.onInit();
+    await _initSharedPreferences();
+  }
+
+  Future<void> _initSharedPreferences() async {
+    try {
+      prefs = await SharedPreferences.getInstance();
+      final bool hasToken = prefs.getString('token') != null;
+
+      if (hasToken) {
+        final staffData = prefs.getString('staff');
+        if (staffData != null) {
+          final staff = jsonDecode(staffData) as Map<String, dynamic>;
+          showSuccessDialog(
+            "Welcome Back, ${staff['username']}! 👋",
+            "We're restoring your session...",
+                () => _redirectToHome(),
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint('SharedPreferences init error: $e');
+      showErrorDialog(
+        "Session Trouble",
+        "We couldn't restore your session automatically. Please login again.",
+      );
+    }
+  }
+
+  Future<void> _redirectToHome() async {
+    try {
       final staffJson = prefs.getString('staff');
       final userProfileJson = prefs.getString('user_profile');
 
@@ -37,77 +106,146 @@ class LoginController extends GetxController {
         Get.offAllNamed(
           AppRoute.home,
           arguments: {
-            'staff': jsonDecode(staffJson), // Decode staff data
-            'userProfile': userProfileJson != null ? jsonDecode(userProfileJson) : null,
+            'staff': jsonDecode(staffJson),
+            'userProfile': userProfileJson != null ? jsonDecode(userProfileJson) : {},
           },
         );
       }
+    } catch (e) {
+      debugPrint('Navigation error: $e');
+      showErrorDialog(
+          "Navigation Trouble",
+          "We're having trouble taking you to the news. Please try again."
+      );
     }
   }
 
-  // Handle login process
-  void login() async {
-    if (isLoading.value) return; // Prevent multiple clicks
+  Future<void> login() async {
+    if (isLoading.value) return;
 
-    // Validate email and password fields
+    // Validate inputs with fun messages
     if (email.text.isEmpty || password.text.isEmpty) {
-      showErrorDialog("Oops! 😕", "Please fill in all fields to continue.");
+      showErrorDialog("Hold on!🔒", _getRandomMessage('emptyFields'));
       return;
     }
 
-    isLoading(true); // Start loading
+    if (!RegExp(r"^[^@\s]+@[^@\s]+\.[^@\s]+$").hasMatch(email.text.trim())) {
+      showErrorDialog("Email Alert!😕", _getRandomMessage('invalidEmail'));
+      return;
+    }
 
-    final data = {
-      'email': email.text.trim(),
-      'password': password.text.trim(),
-    };
+    isLoading(true);
 
     try {
-      final response = await DioClient().getInstance().post("/login", data: data);
+      final response = await DioClient().getInstance().post(
+        "/login",
+        data: {
+          'email': email.text.trim(),
+          'password': password.text.trim(),
+        },
+      ).timeout(const Duration(seconds: 15));
 
-      if (response.statusCode == 200) {
-        // Parse the response
-        final staff = response.data['staff'];
-        final userProfile = response.data['user_profile']; // Extract user profile
-        final token = response.data['token'];
-
-        // Save token, staff, and userProfile data
-        await prefs.setString('token', token);
-        await prefs.setString('staff', jsonEncode(staff));
-        await prefs.setString('user_profile', jsonEncode(userProfile));
-
-        // Debug logs
-        print("Staff data: $staff");
-        print("User Profile data: $userProfile");
-        print("User ID from userProfile: ${userProfile['user_id']}");
-
-        // Navigate to home page with staff and userProfile data
-        Get.offNamed(
-          AppRoute.home,
-          arguments: {
-            'staff': staff, // Pass staff data
-            'userProfile': userProfile, // Pass user profile
-          },
-        );
-
-        // Show success dialog
-        showSuccessDialog(
-          "Welcome Back! 🎉", // Title with emoji for a modern touch
-          "You've successfully logged in. Let's dive back into the news!", // Friendly success message
-              () {}, // Callback (optional)
-        );
-      } else if (response.statusCode == 401) {
-        // Handle invalid credentials
-        showErrorDialog("Uh-oh! 🔒", "The email or password you entered is incorrect. Please try again.");
+      if (response.statusCode! >= 200 && response.statusCode! < 300) {
+        await _handleLoginResponse(response.data);
       } else {
-        // Handle other errors
-        showErrorDialog("Oops! 😕", "Something went wrong on our end. Please try again later.");
+        final errorMessage = response.data?['message'] ??
+            response.data?['error'] ??
+            _getRandomMessage('loginFailed');
+        showErrorDialog("Oops!", errorMessage);
       }
-    } catch (e) {
-      // Handle network or unexpected errors
-      showErrorDialog("Network Issue 🌐", "It seems you're offline. Please check your internet connection and try again.");
+    } on SocketException {
+      showErrorDialog("Connection Issue", _getRandomMessage('networkError'));
+    } on TimeoutException {
+      showErrorDialog("Too Slow!", _getRandomMessage('timeout'));
+    } on DioException catch (e) {
+      debugPrint('Dio error: ${e.response?.data}');
+      final errorMessage = e.response?.data?['message'] ??
+          e.response?.data?['error'] ??
+          _getRandomMessage('loginFailed');
+      showErrorDialog("Whoops!", errorMessage);
+    } catch (e, stackTrace) {
+      debugPrint('Login error: $e');
+      debugPrint('Stack trace: $stackTrace');
+      showErrorDialog("Hmm...", _getRandomMessage('unexpectedError'));
     } finally {
-      isLoading(false); // Stop loading
+      isLoading(false);
     }
+  }
+
+  Future<void> _handleLoginResponse(Map<String, dynamic> responseData) async {
+    try {
+      final staff = responseData['staff'] as Map<String, dynamic>?;
+      final userProfile = responseData['user_profile'] as Map<String, dynamic>? ?? {};
+      final token = responseData['token'] as String?;
+
+      if (staff == null || token == null || token.isEmpty) {
+        throw Exception('Invalid response data');
+      }
+
+      // Check if user has logged in before
+      final bool isReturningUser = prefs.getString('token') != null;
+      final String welcomeTitle = isReturningUser
+          ? "Welcome Back, ${staff['username']}! 👋"
+          : "Welcome, ${staff['username']}! 🎉";
+      final String welcomeMessage = isReturningUser
+          ? "We missed you! Ready to catch up on the latest news?"
+          : "Thanks for joining us! Let's explore the news together!";
+
+      final saveResults = await Future.wait([
+        prefs.setString('token', token),
+        prefs.setString('staff', jsonEncode(staff)),
+        prefs.setString('user_profile', jsonEncode(userProfile)),
+      ]);
+
+      if (saveResults.any((result) => result == false)) {
+        throw Exception('Failed to save login data');
+      }
+
+      showSuccessDialog(
+        welcomeTitle,
+        "Email: ${staff['email']}\n\n$welcomeMessage",
+            () {
+          Get.offAllNamed(
+            AppRoute.home,
+            arguments: {
+              'staff': staff,
+              'userProfile': userProfile,
+            },
+          );
+        },
+      );
+    } catch (e, stackTrace) {
+      debugPrint('Error processing login response: $e');
+      debugPrint('Stack trace: $stackTrace');
+
+      await Future.wait([
+        prefs.remove('token'),
+        prefs.remove('staff'),
+        prefs.remove('user_profile'),
+      ]);
+
+      showErrorDialog(
+        "Oopsie!",
+        "We got confused and dropped your login. Try again?",
+      );
+    }
+  }
+
+  void togglePasswordVisibility() {
+    isPasswordVisible.value = !isPasswordVisible.value;
+    showSuccessDialog(
+      "Password Visibility Changed 👀",
+      isPasswordVisible.value
+          ? "Your password is now visible. Be careful around prying eyes!"
+          : "Your password is now hidden. Safety first!",
+      null,
+    );
+  }
+
+  @override
+  void onClose() {
+    email.dispose();
+    password.dispose();
+    super.onClose();
   }
 }

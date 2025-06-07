@@ -4,6 +4,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:pretty_dio_logger/pretty_dio_logger.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:http_parser/http_parser.dart';
 
 class DioClient {
   String? token;
@@ -13,12 +14,13 @@ class DioClient {
   final int _maxRetries;
   final Duration _retryDelay;
   final bool _enableCircuitBreaker;
+  final Duration _circuitBreakerCooldown;
 
   late Dio _dio;
   final Connectivity _connectivity = Connectivity();
   bool _circuitOpen = false;
   DateTime? _lastFailureTime;
-  StreamSubscription<ConnectivityResult>? _connectivitySubscription;
+  StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription; // UPDATED
 
   DioClient({
     this.token,
@@ -28,19 +30,20 @@ class DioClient {
     int? maxRetries,
     Duration? retryDelay,
     bool? enableCircuitBreaker,
+    Duration? circuitBreakerCooldown,
   })  : _connectTimeout = connectTimeout ?? const Duration(seconds: 45),
         _receiveTimeout = receiveTimeout ?? const Duration(seconds: 45),
         _sendTimeout = sendTimeout ?? const Duration(seconds: 45),
         _maxRetries = maxRetries ?? 3,
         _retryDelay = retryDelay ?? const Duration(seconds: 2),
-        _enableCircuitBreaker = enableCircuitBreaker ?? true {
+        _enableCircuitBreaker = enableCircuitBreaker ?? true,
+        _circuitBreakerCooldown = circuitBreakerCooldown ?? const Duration(minutes: 1) {
     _initDio();
+    _checkInitialConnectivity();
     _startConnectivityMonitoring();
   }
 
-  Dio getInstance() {
-    return _dio;
-  }
+  Dio getInstance() => _dio;
 
   void _initDio() {
     _dio = Dio(
@@ -64,12 +67,59 @@ class DioClient {
 
   Map<String, String> _getDefaultHeaders() {
     return {
-      'Content-Type': 'application/json',
       'Accept': 'application/json',
       'Accept-Encoding': 'gzip',
       'Connection': 'keep-alive',
       if (token != null) 'Authorization': 'Bearer $token',
     };
+  }
+
+  Future<void> _checkInitialConnectivity() async {
+    try {
+      final results = await _connectivity.checkConnectivity();
+      final result = results.isNotEmpty ? results.first : ConnectivityResult.none;
+      _logConnectivity(result);
+
+      if (result == ConnectivityResult.none) {
+        _activateCircuitBreaker();
+        throw DioException(
+          requestOptions: RequestOptions(path: '/'),
+          error: 'No internet connection available',
+          type: DioExceptionType.connectionError,
+        );
+      }
+    } catch (e) {
+      _activateCircuitBreaker();
+      rethrow;
+    }
+  }
+
+  void _logConnectivity(ConnectivityResult result) {
+    print('📡 Connectivity changed: $result');
+    if (result == ConnectivityResult.none) {
+      print('⚠️ No internet connection!');
+    } else {
+      print('✅ Back online: $result');
+    }
+  }
+
+  void _startConnectivityMonitoring() {
+    _connectivitySubscription =
+        _connectivity.onConnectivityChanged.listen((List<ConnectivityResult> results) {
+          final result = results.isNotEmpty ? results.first : ConnectivityResult.none;
+          _logConnectivity(result);
+
+          if (result != ConnectivityResult.none) {
+            if (_circuitOpen &&
+                _lastFailureTime != null &&
+                DateTime.now().difference(_lastFailureTime!) >= _circuitBreakerCooldown) {
+              _circuitOpen = false;
+              print('🔄 Circuit breaker reset due to restored connection.');
+            }
+          } else {
+            _activateCircuitBreaker();
+          }
+        });
   }
 
   Interceptor _createRetryInterceptor() {
@@ -82,18 +132,35 @@ class DioClient {
           ));
         }
 
-        final connectivityResult = await _connectivity.checkConnectivity();
-        if (connectivityResult == ConnectivityResult.none) {
-          return handler.reject(DioException(
-            requestOptions: options,
-            error: 'No internet connection available',
-            type: DioExceptionType.connectionError,
-          ));
+        if (options.data is! FormData) {
+          try {
+            final results = await _connectivity.checkConnectivity();
+            final result = results.isNotEmpty ? results.first : ConnectivityResult.none;
+            if (result == ConnectivityResult.none) {
+              _activateCircuitBreaker();
+              return handler.reject(DioException(
+                requestOptions: options,
+                error: 'No internet connection available',
+                type: DioExceptionType.connectionError,
+              ));
+            }
+          } catch (e) {
+            _activateCircuitBreaker();
+            return handler.reject(DioException(
+              requestOptions: options,
+              error: 'Network connectivity check failed',
+              type: DioExceptionType.connectionError,
+            ));
+          }
         }
 
         return handler.next(options);
       },
       onError: (error, handler) async {
+        if (error.requestOptions.data is FormData) {
+          return handler.next(error);
+        }
+
         if (!_shouldRetry(error)) {
           return handler.next(error);
         }
@@ -108,7 +175,6 @@ class DioClient {
         await Future.delayed(delay);
 
         error.requestOptions.extra['retryCount'] = retryCount + 1;
-        error.requestOptions.extra['lastRetry'] = DateTime.now();
 
         try {
           final response = await _dio.request(
@@ -121,7 +187,7 @@ class DioClient {
             ),
           );
           return handler.resolve(response);
-        } catch (e) {
+        } catch (_) {
           return handler.next(error);
         }
       },
@@ -155,25 +221,67 @@ class DioClient {
   }
 
   void _activateCircuitBreaker() {
-    _circuitOpen = true;
-    _lastFailureTime = DateTime.now();
-    Timer(const Duration(minutes: 1), () => _circuitOpen = false);
+    if (!_circuitOpen) {
+      _circuitOpen = true;
+      _lastFailureTime = DateTime.now();
+      Timer(_circuitBreakerCooldown, _resetCircuitBreaker);
+      print('🛑 Circuit breaker activated!');
+    }
   }
 
-  void _startConnectivityMonitoring() {
-    _connectivitySubscription = _connectivity.onConnectivityChanged.listen((result) {
-      if (result != ConnectivityResult.none && _circuitOpen) {
-        _circuitOpen = false;
+  void _resetCircuitBreaker() {
+    if (_lastFailureTime != null &&
+        DateTime.now().difference(_lastFailureTime!) >= _circuitBreakerCooldown) {
+      _circuitOpen = false;
+      print('✅ Circuit breaker cooldown expired, back to normal.');
+    }
+  }
+
+  Future<Response> updateProfile({
+    String? username,
+    String? email,
+    String? imagePath,
+  }) async {
+    try {
+      final results = await _connectivity.checkConnectivity();
+      final result = results.isNotEmpty ? results.first : ConnectivityResult.none;
+      if (result == ConnectivityResult.none) {
+        throw DioException(
+          requestOptions: RequestOptions(path: '/profile'),
+          error: 'No internet connection available',
+          type: DioExceptionType.connectionError,
+        );
       }
-    });
-  }
 
-  Options getLowBandwidthOptions() {
-    return Options(
-      headers: _getDefaultHeaders(),
-      receiveTimeout: _receiveTimeout * 2,
-      sendTimeout: _sendTimeout * 2,
-    );
+      final formData = FormData.fromMap({
+        if (username != null) 'username': username,
+        if (email != null) 'email': email,
+        if (imagePath != null)
+          'profile_picture': await MultipartFile.fromFile(
+            imagePath,
+            filename: 'profile_${DateTime.now().millisecondsSinceEpoch}.jpg',
+            contentType: MediaType('image', 'jpeg'),
+          ),
+      });
+
+      final response = await _dio.put(
+        '/profile',
+        data: formData,
+        options: Options(
+          headers: {
+            ..._getDefaultHeaders(),
+            'Content-Type': 'multipart/form-data',
+          },
+        ),
+      );
+
+      return response;
+    } on DioException catch (e) {
+      if (e.type == DioExceptionType.connectionError) {
+        _activateCircuitBreaker();
+      }
+      rethrow;
+    }
   }
 
   Future<void> updateToken(String newToken) async {

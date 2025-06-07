@@ -124,6 +124,23 @@ class _LoginState extends State<Login> {
                     return null;
                   },
                 ),
+                // Register button
+                SizedBox(height: 12),
+                Center(
+                  child: TextButton(
+                    onPressed: () {
+                      Get.toNamed(AppRoute.forgotPassword);
+                    },
+                    child: Text(
+                      "Forgot Password?",
+                      style: TextStyle(
+                        color: Colors.blueAccent,
+                        fontSize: 16,
+                        decoration: TextDecoration.underline,
+                      ),
+                    ),
+                  ),
+                ),
                 SizedBox(height: 24),
 
                 // Login Button

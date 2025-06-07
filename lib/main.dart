@@ -2,28 +2,61 @@ import 'dart:async';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:newsflow/Routes/AppPage.dart'; // Import AppPage for routes
-import 'package:newsflow/loading_screen.dart'; // Import your loading screen
+import 'package:newsflow/Routes/AppPage.dart';
+// import 'package:uni_links/uni_links.dart';
+import 'package:app_links/app_links.dart';
+
+import 'package:newsflow/loading_screen.dart';
+import 'package:newsflow/Views/ResetPasswordScreen.dart';
+
+// Deep link handler function
+void _handleDeepLink(Uri uri) {
+  debugPrint('Handling deep link: $uri');
+  if (uri.host == 'reset-password') {
+    final token = uri.queryParameters['token'];
+    final email = uri.queryParameters['email'];
+
+    if (token != null && email != null) {
+      Get.to(() => ResetPasswordScreen(
+        token: token,
+        email: Uri.decodeComponent(email),
+      ));
+    }
+  }
+}
+
+// Initialize deep linking
+// Replace your initDeepLinking with:
+Future<void> initDeepLinking() async {
+  final appLinks = AppLinks();
+
+  // Handle initial link
+  final initialUri = await appLinks.getInitialLink();
+  if (initialUri != null) {
+    _handleDeepLink(initialUri);
+  }
+
+  // Listen for links while app is running
+  appLinks.uriLinkStream.listen(_handleDeepLink);
+}
 
 void main() {
-  // Ensure Flutter is initialized
-  WidgetsFlutterBinding.ensureInitialized();
+  runZonedGuarded(() async {
+    WidgetsFlutterBinding.ensureInitialized();
 
-  // Custom error handling
-  FlutterError.onError = (details) {
-    // Suppress specific errors (e.g., ImpellerValidationBreak)
-    if (details.exception.toString().contains('ImpellerValidationBreak')) return;
-    // Print the error to the console
-    FlutterError.presentError(details);
-  };
+    // Initialize deep linking
+    await initDeepLinking();
 
-  // Run the app with error handling
-  runZonedGuarded(() {
-    runApp(MyApp());
+    // Custom error handling
+    FlutterError.onError = (details) {
+      if (details.exception.toString().contains('ImpellerValidationBreak')) return;
+      FlutterError.presentError(details);
+    };
+
+    runApp(const MyApp());
   }, (error, stackTrace) {
-    // Handle any uncaught errors
-    print('Uncaught error: $error');
-    print('Stack trace: $stackTrace');
+    debugPrint('Uncaught error: $error');
+    debugPrint('Stack trace: $stackTrace');
   });
 }
 
@@ -48,15 +81,14 @@ class MyApp extends StatelessWidget {
           brightness: Brightness.dark,
         ),
       ),
-      themeMode: ThemeMode.system, // Use system theme mode
-      debugShowCheckedModeBanner: false, // Hide the debug banner
-      home: const LuxuryLoadingScreen(), // Display the loading screen immediately
-      getPages: AppPage.pages, // Use the defined routes from AppPage
-      translations: AppTranslations(), // Add translations
-      locale: Get.deviceLocale, // Use the device's locale
-      fallbackLocale: const Locale('en', 'US'), // Fallback locale
+      themeMode: ThemeMode.system,
+      debugShowCheckedModeBanner: false,
+      home: const LuxuryLoadingScreen(),
+      getPages: AppPage.pages,
+      translations: AppTranslations(),
+      locale: Get.deviceLocale,
+      fallbackLocale: const Locale('en', 'US'),
       builder: (context, child) {
-        // Custom scroll behavior to disable mouse tracking
         return ScrollConfiguration(
           behavior: ScrollBehavior().copyWith(
             dragDevices: {

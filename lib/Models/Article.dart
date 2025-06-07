@@ -13,6 +13,8 @@ class Article {
   final DateTime updatedAt;
   final Employee employee;
   final String? url; // Make this nullable
+  final String? imageUrl; // Add this for the image URL
+  final String? articlePhoto; // Add this for the original photo path
 
   Article({
     required this.articleId,
@@ -27,6 +29,8 @@ class Article {
     required this.updatedAt,
     required this.employee,
     this.url, // Make this nullable
+    this.imageUrl, // Initialize in constructor
+    this.articlePhoto, // Initialize in constructor
   });
 
   factory Article.fromJson(Map<String, dynamic> json) {
@@ -44,6 +48,8 @@ class Article {
       createdAt: DateTime.parse(json['created_at'] ?? DateTime.now().toString()),
       updatedAt: DateTime.parse(json['updated_at'] ?? DateTime.now().toString()),
       employee: Employee.fromJson(json['employee'] ?? {}),
+      imageUrl: json['image_url'], // Map the image URL from JSON
+      articlePhoto: json['article_photo'], // Map the original photo path
     );
   }
 }

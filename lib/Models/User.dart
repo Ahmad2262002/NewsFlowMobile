@@ -2,7 +2,7 @@ import 'dart:convert';
 
 class User {
   // For Registration
-  final String? name; // Represents 'username' in the backend
+  final String? name;
   final String email;
   final String? phone;
   final String password;
@@ -10,47 +10,46 @@ class User {
 
   // For Login Response
   final Staff? staff;
+  final String? profilePicture; // ✅ Profile picture field
   final Map<String, dynamic>? userProfile;
   final String? token;
 
   User({
-    // Registration fields
     this.name,
     required this.email,
     this.phone,
     required this.password,
     required this.passwordConfirm,
-
-    // Login fields
     this.staff,
+    this.profilePicture, // ✅ No 'final' here
     this.userProfile,
     this.token,
   });
 
-  // Convert to JSON for API requests (Registration)
   Map<String, dynamic> toMap() {
     return {
-      'username': name, // Maps to 'username' in the Staff table
+      'username': name,
       'email': email,
       'password': password,
-      'password_confirmation': passwordConfirm, // Match Laravel's expected key
+      'password_confirmation': passwordConfirm,
     };
   }
 
   String toJson() => json.encode(toMap());
 
-  // Parse JSON from API responses (Login)
   factory User.fromJson(Map<String, dynamic> json) {
     return User(
-      email: json['staff']?['email'] ?? '', // Fallback for registration
-      password: '', // Not needed for login response
-      passwordConfirm: '', // Not needed for login response
+      email: json['staff']?['email'] ?? '',
+      password: '',
+      passwordConfirm: '',
       staff: json['staff'] != null ? Staff.fromJson(json['staff']) : null,
-      userProfile: json['user_profile'], // Ensure this matches the API response
+      profilePicture: json['user']?['profile_picture'],
+      userProfile: json['user_profile'],
       token: json['token'],
     );
   }
 }
+
 
 class Staff {
   final int staffId;

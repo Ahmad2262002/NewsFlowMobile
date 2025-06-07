@@ -2,28 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:newsflow/Controllers/RegistrationController.dart';
 
-class Registration extends StatefulWidget {
-  const Registration({super.key});
-
-  @override
-  _RegistrationState createState() => _RegistrationState();
-}
-
-class _RegistrationState extends State<Registration> {
+class Registration extends StatelessWidget {
   final RegistrationController controller = Get.put(RegistrationController());
-  final FocusNode _nameFocusNode = FocusNode();
-  final FocusNode _emailFocusNode = FocusNode();
-  final FocusNode _passwordFocusNode = FocusNode();
-  final FocusNode _confirmPasswordFocusNode = FocusNode();
 
-  @override
-  void dispose() {
-    _nameFocusNode.dispose();
-    _emailFocusNode.dispose();
-    _passwordFocusNode.dispose();
-    _confirmPasswordFocusNode.dispose();
-    super.dispose();
-  }
+  Registration({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -31,76 +13,263 @@ class _RegistrationState extends State<Registration> {
       backgroundColor: Colors.black,
       appBar: AppBar(
         backgroundColor: Colors.black,
-        title: Center(
-          child: Text(
-            "Registration",
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 22,
-              fontWeight: FontWeight.w600,
-            ),
+        title: Text(
+          "Registration",
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 22,
+            fontWeight: FontWeight.w600,
           ),
         ),
         elevation: 0,
-      ),
-      body: SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 40),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              _buildTextField("Name", controller.name, focusNode: _nameFocusNode),
-              _buildTextField("Email", controller.email, focusNode: _emailFocusNode),
-              _buildTextField("Password", controller.password, obscureText: true, focusNode: _passwordFocusNode),
-              _buildTextField("Confirm Password", controller.passwordConfirm, obscureText: true, focusNode: _confirmPasswordFocusNode),
-
-              SizedBox(height: 24),
-              Center(
-                child: ElevatedButton(
-                  onPressed: () {
-                    controller.register();
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.blueAccent,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    padding: EdgeInsets.symmetric(horizontal: 80, vertical: 14),
-                  ),
-                  child: Text(
-                    "Register",
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                  ),
-                ),
-              ),
-              SizedBox(height: 12),
-              Center(
-                child: TextButton(
-                  onPressed: () {
-                    Get.back();
-                  },
-                  child: Text(
-                    "Back",
-                    style: TextStyle(color: Colors.blueAccent, fontSize: 16),
-                  ),
-                ),
-              ),
-            ],
-          ),
+        leading: IconButton(
+          icon: Icon(Icons.arrow_back, color: Colors.white),
+          onPressed: () {
+            if (controller.showEmailScreen.value) {
+              Get.back();
+            } else {
+              controller.showEmailScreen.value = true;
+            }
+          },
         ),
+      ),
+      body: Obx(() {
+        if (controller.showEmailScreen.value) {
+          return _EmailVerificationScreen(controller: controller);
+        } else {
+          return _CompleteRegistrationScreen(controller: controller);
+        }
+      }),
+    );
+  }
+}
+
+class _EmailVerificationScreen extends StatelessWidget {
+  final RegistrationController controller;
+  final FocusNode _emailFocusNode = FocusNode();
+
+  _EmailVerificationScreen({required this.controller});
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      padding: EdgeInsets.symmetric(horizontal: 20, vertical: 40),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            "Step 1: Verify Your Email",
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          SizedBox(height: 8),
+          Text(
+            "Enter your Gmail address to receive a verification code",
+            style: TextStyle(color: Colors.white70, fontSize: 14),
+          ),
+          SizedBox(height: 32),
+
+          // Email Field
+          TextField(
+            controller: controller.email,
+            focusNode: _emailFocusNode,
+            decoration: InputDecoration(
+              filled: true,
+              fillColor: Colors.grey.shade900,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide.none,
+              ),
+              hintText: "yourname@gmail.com",
+              hintStyle: TextStyle(color: Colors.white38),
+              prefixIcon: Icon(Icons.email, color: Colors.white54),
+            ),
+            style: TextStyle(color: Colors.white),
+            keyboardType: TextInputType.emailAddress,
+            textInputAction: TextInputAction.done,
+            onSubmitted: (_) => controller.sendOTP(),
+          ),
+          SizedBox(height: 24),
+
+          // Send OTP Button
+          Obx(() => SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: controller.isLoading.value ? null : controller.sendOTP,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.blueAccent,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                padding: EdgeInsets.symmetric(vertical: 16),
+              ),
+              child: controller.isLoading.value
+                  ? SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Colors.white,
+                ),
+              )
+                  : Text(
+                "Send Verification Code",
+                style: TextStyle(fontSize: 16),
+              ),
+            ),
+          )),
+        ],
+      ),
+    );
+  }
+}
+
+class _CompleteRegistrationScreen extends StatelessWidget {
+  final RegistrationController controller;
+  final FocusNode _nameFocusNode = FocusNode();
+  final FocusNode _otpFocusNode = FocusNode();
+  final FocusNode _passwordFocusNode = FocusNode();
+  final FocusNode _confirmPasswordFocusNode = FocusNode();
+
+  _CompleteRegistrationScreen({required this.controller});
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      padding: EdgeInsets.symmetric(horizontal: 20, vertical: 40),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            "Step 2: Complete Registration",
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          SizedBox(height: 8),
+          RichText(
+            text: TextSpan(
+              text: "Enter the 6-digit code sent to ",
+              style: TextStyle(color: Colors.white70, fontSize: 14),
+              children: [
+                TextSpan(
+                  text: controller.email.text,
+                  style: TextStyle(
+                    color: Colors.blueAccent,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          SizedBox(height: 32),
+
+          // Name Field
+          _buildTextField("Full Name", controller.name, focusNode: _nameFocusNode),
+
+          // OTP Field
+          TextField(
+            controller: controller.otp,
+            focusNode: _otpFocusNode,
+            decoration: InputDecoration(
+              filled: true,
+              fillColor: Colors.grey.shade900,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide.none,
+              ),
+              hintText: "Enter 6-digit code",
+              hintStyle: TextStyle(color: Colors.white38),
+              prefixIcon: Icon(Icons.lock_outline, color: Colors.white54),
+            ),
+            style: TextStyle(color: Colors.white),
+            keyboardType: TextInputType.number,
+            maxLength: 6,
+          ),
+          SizedBox(height: 8),
+
+          Obx(() => Align(
+            alignment: Alignment.centerRight,
+            child: TextButton(
+              onPressed: controller.countdown.value > 0 ? null : controller.resendOTP,
+              child: Text(
+                controller.countdown.value > 0
+                    ? "Resend code in ${controller.countdown.value}s"
+                    : "Resend code",
+                style: TextStyle(
+                  color: controller.countdown.value > 0
+                      ? Colors.white54
+                      : Colors.blueAccent,
+                ),
+              ),
+            ),
+          )),
+
+          // Password Fields
+          _buildTextField(
+            "Password",
+            controller.password,
+            obscureText: true,
+            focusNode: _passwordFocusNode,
+            hintText: "At least 8 characters",
+          ),
+          _buildTextField(
+            "Confirm Password",
+            controller.passwordConfirm,
+            obscureText: true,
+            focusNode: _confirmPasswordFocusNode,
+          ),
+
+          SizedBox(height: 24),
+
+          // Register Button
+          Obx(() => SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: controller.isLoading.value ? null : controller.completeRegistration,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.blueAccent,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                padding: EdgeInsets.symmetric(vertical: 16),
+              ),
+              child: controller.isLoading.value
+                  ? SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Colors.white,
+                ),
+              )
+                  : Text(
+                "Create Account",
+                style: TextStyle(fontSize: 16),
+              ),
+            ),
+          )),
+        ],
       ),
     );
   }
 
-  Widget _buildTextField(String label, TextEditingController controller, {bool obscureText = false, FocusNode? focusNode}) {
+  Widget _buildTextField(
+      String label,
+      TextEditingController controller, {
+        bool obscureText = false,
+        FocusNode? focusNode,
+        String? hintText,
+      }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          label,
-          style: TextStyle(color: Colors.white70, fontSize: 16),
-        ),
+        Text(label, style: TextStyle(color: Colors.white70, fontSize: 16)),
         SizedBox(height: 8),
         TextField(
           controller: controller,
@@ -113,7 +282,7 @@ class _RegistrationState extends State<Registration> {
               borderRadius: BorderRadius.circular(12),
               borderSide: BorderSide.none,
             ),
-            hintText: "Enter your ${label.toLowerCase()}",
+            hintText: hintText ?? "Enter your ${label.toLowerCase()}",
             hintStyle: TextStyle(color: Colors.white38),
           ),
           style: TextStyle(color: Colors.white),
