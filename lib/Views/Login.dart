@@ -94,10 +94,10 @@ class _LoginState extends State<Login> {
                   style: TextStyle(color: Colors.white70, fontSize: 16),
                 ),
                 SizedBox(height: 8),
-                TextFormField(
+                Obx(() => TextFormField(
                   controller: controller.password,
                   focusNode: _passwordFocusNode,
-                  obscureText: true,
+                  obscureText: !controller.isPasswordVisible.value,
                   decoration: InputDecoration(
                     filled: true,
                     fillColor: Colors.grey.shade900,
@@ -107,6 +107,17 @@ class _LoginState extends State<Login> {
                     ),
                     hintText: "Enter your password",
                     hintStyle: TextStyle(color: Colors.white38),
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        controller.isPasswordVisible.value
+                            ? Icons.visibility
+                            : Icons.visibility_off,
+                        color: Colors.white54,
+                      ),
+                      onPressed: () {
+                        controller.togglePasswordVisibility();
+                      },
+                    ),
                   ),
                   style: TextStyle(color: Colors.white),
                   textInputAction: TextInputAction.done,
@@ -123,7 +134,7 @@ class _LoginState extends State<Login> {
                     }
                     return null;
                   },
-                ),
+                )),
                 // Register button
                 SizedBox(height: 12),
                 Center(

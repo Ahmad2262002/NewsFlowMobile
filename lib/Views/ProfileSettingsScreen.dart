@@ -68,10 +68,19 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
   ImageProvider? _getProfileImage() {
     try {
       if (_pickedImage != null) return FileImage(File(_pickedImage!.path));
+
       final profilePic = _controller.profilePicturePath;
-      if (profilePic != null) {
+      if (profilePic != null && profilePic.isNotEmpty) {
+        // Check if it's already a full URL
+        if (profilePic.startsWith('http')) {
+          return NetworkImage(
+            profilePic,
+            headers: {'Authorization': 'Bearer ${_controller.prefs.getString('token')}'},
+          );
+        }
+        // Otherwise construct the full URL
         return NetworkImage(
-          'http://172.20.10.3:8000/storage/$profilePic?cb=${DateTime.now().millisecondsSinceEpoch}',
+          'http://172.20.10.3:8000/storage/$profilePic',
           headers: {'Authorization': 'Bearer ${_controller.prefs.getString('token')}'},
         );
       }

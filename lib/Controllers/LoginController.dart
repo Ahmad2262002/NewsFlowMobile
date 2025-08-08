@@ -79,6 +79,7 @@ class LoginController extends GetxController {
 
       if (hasToken) {
         final staffData = prefs.getString('staff');
+        final userProfileData = prefs.getString('userProfile'); // Changed from user_profile
         if (staffData != null) {
           final staff = jsonDecode(staffData) as Map<String, dynamic>;
           showSuccessDialog(
@@ -100,7 +101,7 @@ class LoginController extends GetxController {
   Future<void> _redirectToHome() async {
     try {
       final staffJson = prefs.getString('staff');
-      final userProfileJson = prefs.getString('user_profile');
+      final userProfileJson = prefs.getString('userProfile'); // Changed from user_profile
 
       if (staffJson != null) {
         Get.offAllNamed(
@@ -175,12 +176,20 @@ class LoginController extends GetxController {
   Future<void> _handleLoginResponse(Map<String, dynamic> responseData) async {
     try {
       final staff = responseData['staff'] as Map<String, dynamic>?;
-      final userProfile = responseData['user_profile'] as Map<String, dynamic>? ?? {};
       final token = responseData['token'] as String?;
+      final userId = responseData['user_id']?.toString(); // Get user_id from response
 
       if (staff == null || token == null || token.isEmpty) {
         throw Exception('Invalid response data');
       }
+
+      // Create complete user profile including user_id
+      final userProfile = {
+        'user_id': userId ?? staff['staff_id']?.toString(), // Fallback to staff_id if needed
+        'username': staff['username'],
+        'email': staff['email'],
+        'profile_picture': responseData['profile_picture'] // Add if available
+      };
 
       // Check if user has logged in before
       final bool isReturningUser = prefs.getString('token') != null;
@@ -194,7 +203,7 @@ class LoginController extends GetxController {
       final saveResults = await Future.wait([
         prefs.setString('token', token),
         prefs.setString('staff', jsonEncode(staff)),
-        prefs.setString('user_profile', jsonEncode(userProfile)),
+        prefs.setString('userProfile', jsonEncode(userProfile)), // Changed to userProfile
       ]);
 
       if (saveResults.any((result) => result == false)) {
@@ -221,7 +230,7 @@ class LoginController extends GetxController {
       await Future.wait([
         prefs.remove('token'),
         prefs.remove('staff'),
-        prefs.remove('user_profile'),
+        prefs.remove('userProfile'), // Changed to userProfile
       ]);
 
       showErrorDialog(

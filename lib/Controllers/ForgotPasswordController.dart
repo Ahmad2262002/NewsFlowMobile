@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 import 'package:newsflow/Core/Network/DioClient.dart';
 import 'package:newsflow/Core/showSuccessDialog.dart';
 import 'package:newsflow/Core/showErrorDialog.dart';
+import 'package:newsflow/Routes/AppRoute.dart';
 
 class ForgotPasswordController extends GetxController {
   final TextEditingController email = TextEditingController();
@@ -25,8 +26,13 @@ class ForgotPasswordController extends GetxController {
       if (response.statusCode == 200) {
         showSuccessDialog(
           "Email Sent",
-          "If your email exists in our system, you'll receive a reset link",
-              () => Get.back(),
+          "A password reset link has been sent to your email",
+              () {
+            Get.toNamed(AppRoute.login, arguments: {
+              'token': response.data['token'],
+              'email': email.text.trim(),
+            });
+          },
         );
       } else {
         showErrorDialog(

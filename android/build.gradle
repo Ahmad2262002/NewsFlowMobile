@@ -1,7 +1,7 @@
 // Top-level build file where you can add configuration options common to all sub-projects/modules.
 
 buildscript {
-    ext.kotlin_version = '1.9.10' // Consistent Kotlin version
+    ext.kotlin_version = '1.9.22' // Consistent Kotlin version
 
     repositories {
         google()
@@ -9,7 +9,7 @@ buildscript {
         gradlePluginPortal() // Added for plugin resolution
     }
     dependencies {
-        classpath 'com.android.tools.build:gradle:8.3.1'
+        classpath 'com.android.tools.build:gradle:8.4.0'
         classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
     }
 }
@@ -37,7 +37,7 @@ subprojects {
     afterEvaluate { project ->
         if (project.hasProperty("android")) {
             android {
-                compileSdkVersion 34 // Added compile SDK version
+                compileSdkVersion 35 // Added compile SDK version
             }
         }
         if (project.hasProperty("kotlin_version")) {

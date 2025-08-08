@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:newsflow/Controllers/ForgotPasswordController.dart';
 
+import '../Routes/AppRoute.dart';
+
 class ForgotPasswordScreen extends StatelessWidget {
   final ForgotPasswordController controller = Get.put(ForgotPasswordController());
 
@@ -89,8 +91,11 @@ class ForgotPasswordScreen extends StatelessWidget {
                   'Send Reset Link',
                   style: TextStyle(fontSize: 16),
                 ),
+
               ),
             )),
+            // Back to Login Button
+            
           ],
         ),
       ),
